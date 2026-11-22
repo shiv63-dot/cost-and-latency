@@ -1,0 +1,66 @@
+{
+  "title": "Cost & Latency Guardrail Proxy — Observability",
+  "uid": "guardrail-proxy-v1",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request Volume by Cache Status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum by (cache_status) (rate(proxy_requests_total[1m]))", "legendFormat": "{{cache_status}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Average & P95 Latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(proxy_request_latency_ms_bucket[5m])) by (le))", "legendFormat": "P95 Latency" },
+        { "expr": "rate(proxy_request_latency_ms_sum[5m]) / rate(proxy_request_latency_ms_count[5m])", "legendFormat": "Avg Latency" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "gauge",
+      "title": "Cache Hit Ratio",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum(proxy_cache_hits_total) / (sum(proxy_cache_hits_total) + sum(proxy_cache_misses_total))" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Estimated API Cost vs Cache Savings ($)",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        { "expr": "proxy_estimated_cost_usd_total", "legendFormat": "Estimated Spend" },
+        { "expr": "proxy_estimated_savings_usd_total", "legendFormat": "Cache Savings" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Token Consumption Rate (Input vs Output)",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        { "expr": "sum by (type) (rate(proxy_tokens_total[1m]))", "legendFormat": "{{type}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Error Rate & Model Usage Distribution",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 },
+      "targets": [
+        { "expr": "sum by (model) (proxy_requests_total)", "legendFormat": "Requests: {{model}}" },
+        { "expr": "rate(proxy_provider_errors_total[5m])", "legendFormat": "Provider Errors/sec" }
+      ]
+    }
+  ]
+}

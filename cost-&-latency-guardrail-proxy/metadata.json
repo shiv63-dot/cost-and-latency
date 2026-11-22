@@ -1,0 +1,6 @@
+{
+  "name": "Cost & Latency Guardrail Proxy",
+  "description": "AI Infrastructure Optimization Platform with semantic caching, intelligent LLM routing, cost analytics, and rate/budget guardrails.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

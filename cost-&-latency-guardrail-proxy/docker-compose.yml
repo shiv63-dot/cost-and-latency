@@ -1,0 +1,118 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: guardrail-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - proxy-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: guardrail-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-guardrail_proxy}
+      POSTGRES_USER: ${POSTGRES_USER:-proxy_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proxy_user} -d ${POSTGRES_DB:-guardrail_proxy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - proxy-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guardrail-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      MOCK_PROVIDER_MODE: ${MOCK_PROVIDER_MODE:-true}
+      PRIMARY_MODEL: ${PRIMARY_MODEL:-gpt-4o}
+      FALLBACK_MODEL: ${FALLBACK_MODEL:-gpt-4o-mini}
+      FALLBACK_ENABLED: ${FALLBACK_ENABLED:-true}
+      ADMIN_PASSCODE: ${ADMIN_PASSCODE:-change_me_admin_pass}
+      PROXY_CLIENT_API_KEY: ${PROXY_CLIENT_API_KEY:-change_me_client_key}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-proxy_user}:${POSTGRES_PASSWORD:-change_me_in_prod}@postgres:5432/${POSTGRES_DB:-guardrail_proxy}
+      SEMANTIC_SIMILARITY_THRESHOLD: ${SEMANTIC_SIMILARITY_THRESHOLD:-0.84}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - proxy-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: guardrail-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - proxy-net
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: guardrail-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - backend
+    networks:
+      - proxy-net
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: guardrail-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - proxy-net
+
+volumes:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  proxy-net:
+    driver: bridge
